@@ -10,6 +10,7 @@ services:
       POSTGRES_PASSWORD: mikrotik
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
     ports:
       - "5432:5432"
     healthcheck:
