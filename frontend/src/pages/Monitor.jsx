@@ -62,6 +62,7 @@ export default function Monitor() {
   const [histLoading, setHistLoading] = useState(false);
   const [topDevices, setTopDevices] = useState([]);
   const [topLoading, setTopLoading] = useState(false);
+  const [hotspotMacUser, setHotspotMacUser] = useState({});
 
   // Real-time via socket
   const handleUpdate = useCallback((data) => {
@@ -111,7 +112,31 @@ export default function Monitor() {
     setTopLoading(false);
   }, []);
 
+  const loadHotspotMacUser = useCallback(async () => {
+    try {
+      const [act, mac] = await Promise.allSettled([api.get('/hotspot/active'), api.get('/mac')]);
+      const map = {};
+      // Fill from hotspot/host first (includes recent/idle hosts)
+      const bindings = mac.value?.data?.bindings || [];
+      for (const h of bindings) {
+        const m = String(h['mac-address'] || '').toLowerCase();
+        if (m && h.user) map[m] = h.user;
+      }
+      // Active sessions override (most current)
+      for (const a of (act.value?.data || [])) {
+        const m = String(a['mac-address'] || '').toLowerCase();
+        if (m && a.user) map[m] = a.user;
+      }
+      setHotspotMacUser(map);
+    } catch { /* ignore */ }
+  }, []);
+
   useEffect(() => { loadHistory(range); loadTopDevices(range); }, [range, loadHistory, loadTopDevices]);
+  useEffect(() => {
+    loadHotspotMacUser();
+    const id = setInterval(loadHotspotMacUser, 30_000);
+    return () => clearInterval(id);
+  }, [loadHotspotMacUser]);
 
   function handlePreset(key) {
     setPreset(key);
@@ -290,6 +315,15 @@ export default function Monitor() {
                                 </Text>
                               </Space>
                             ),
+                          },
+                          {
+                            title: 'Hotspot User', width: 140,
+                            render: (_, d) => {
+                              const u = hotspotMacUser[String(d.mac || '').toLowerCase()];
+                              return u
+                                ? <Tag color="blue">{u}</Tag>
+                                : <Text type="secondary" style={{ fontSize: 11 }}>-</Text>;
+                            },
                           },
                           {
                             title: 'Type', width: 100,

@@ -1,13 +1,14 @@
-import { useState } from 'react';
-import { Layout, Menu, Avatar, Dropdown, theme, Switch, Tooltip } from 'antd';
+import { useEffect, useState } from 'react';
+import { Layout, Menu, Avatar, Dropdown, theme, Switch, Tooltip, Input, Badge, Typography } from 'antd';
 import {
   DashboardOutlined, WifiOutlined, BranchesOutlined, FilterOutlined,
   LockOutlined, SaveOutlined, SettingOutlined, FileTextOutlined,
   MonitorOutlined, ApartmentOutlined, UserOutlined, LogoutOutlined,
   TeamOutlined, ScanOutlined, ClockCircleOutlined,
   FileExcelOutlined, BulbOutlined, ClusterOutlined, MobileOutlined,
-  KeyOutlined,
+  KeyOutlined, SafetyCertificateOutlined, BellOutlined, SearchOutlined,
 } from '@ant-design/icons';
+import api from '../../services/api';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import ChangePasswordModal from '../ChangePasswordModal';
 
@@ -49,10 +50,25 @@ const menuItems = [
     label: 'System',
     children: [
       { key: '/users', icon: <TeamOutlined />, label: 'Users' },
+      { key: '/audit-password', icon: <KeyOutlined />, label: 'Password Audit' },
+      { key: '/bruteforce', icon: <SafetyCertificateOutlined />, label: 'Brute-Force Block' },
       { key: '/settings', icon: <SettingOutlined />, label: 'Settings' },
     ],
   },
 ];
+
+// Build a flat lookup of path → label for the page-title header
+const PATH_TITLES = (() => {
+  const out = { '/': 'Dashboard' };
+  function walk(items) {
+    for (const it of items) {
+      if (it.children) walk(it.children);
+      else if (it.key) out[it.key] = it.label;
+    }
+  }
+  walk(menuItems);
+  return out;
+})();
 
 export default function AppLayout({ darkMode, onToggleDark }) {
   const navigate = useNavigate();
@@ -61,6 +77,29 @@ export default function AppLayout({ darkMode, onToggleDark }) {
 
   const username = localStorage.getItem('username') || 'Admin';
   const [pwOpen, setPwOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [alertCount, setAlertCount] = useState(0);
+
+  // Poll alert count (critical + high in last 24h) for the bell badge
+  useEffect(() => {
+    async function load() {
+      try {
+        const r = await api.get('/dashboard/security-pulse?hours=24');
+        setAlertCount((r.data?.critical || 0) + (r.data?.high || 0));
+      } catch { /* ignore */ }
+    }
+    load();
+    const t = setInterval(load, 60_000);
+    return () => clearInterval(t);
+  }, []);
+
+  function onSearch(value) {
+    const q = (value || '').trim().toLowerCase();
+    if (!q) return;
+    // Simple fuzzy match across known pages
+    const hit = Object.entries(PATH_TITLES).find(([, label]) => label.toLowerCase().includes(q));
+    if (hit) { navigate(hit[0]); setSearch(''); }
+  }
 
   function logout() {
     localStorage.removeItem('token');
@@ -101,7 +140,20 @@ export default function AppLayout({ darkMode, onToggleDark }) {
         />
       </Sider>
       <Layout>
-        <Header style={{ background: token.colorBgContainer, padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 16, borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
+        <Header style={{ background: token.colorBgContainer, padding: '0 24px', display: 'flex', alignItems: 'center', gap: 16, borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
+          <Typography.Title level={4} style={{ margin: 0, flex: '0 0 auto' }}>
+            {PATH_TITLES[pathname] || ''}
+          </Typography.Title>
+          <Input
+            placeholder="ค้นหาเมนู..."
+            prefix={<SearchOutlined style={{ color: '#bbb' }} />}
+            allowClear
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            onPressEnter={e => onSearch(e.target.value)}
+            style={{ maxWidth: 280, marginLeft: 12 }}
+          />
+          <div style={{ flex: 1 }} />
           <Tooltip title={darkMode ? 'Light mode' : 'Dark mode'}>
             <Switch
               checked={darkMode}
@@ -109,6 +161,14 @@ export default function AppLayout({ darkMode, onToggleDark }) {
               checkedChildren={<BulbOutlined />}
               unCheckedChildren={<BulbOutlined />}
             />
+          </Tooltip>
+          <Tooltip title={alertCount > 0 ? `${alertCount} security events (24h) — คลิกดูรายละเอียด` : 'ไม่มีเหตุการณ์อันตราย (24h)'}>
+            <Badge count={alertCount} size="small" offset={[-2, 2]}>
+              <BellOutlined
+                style={{ fontSize: 18, cursor: 'pointer', color: alertCount > 0 ? '#ff4d4f' : token.colorTextSecondary }}
+                onClick={() => navigate('/logs')}
+              />
+            </Badge>
           </Tooltip>
           <Dropdown menu={userMenu} placement="bottomRight">
             <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>

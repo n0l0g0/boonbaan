@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const auth = require('../middleware/auth');
 const mikrotik = require('../services/mikrotik');
+const { query } = require('../config/db');
 const { getMikrotikClient } = require('../config/mikrotik');
 const {
   SITE_CATEGORIES, categorize,
@@ -89,6 +90,102 @@ router.get('/', auth, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// GET /dashboard/security-pulse?hours=24 — threat overview from logs + audit
+router.get('/security-pulse', auth, async (req, res) => {
+  try {
+    const hours = Math.min(Number(req.query.hours) || 24, 24 * 30);
+
+    const [bySeverity, topAttackers, recentAudit, byCategory] = await Promise.all([
+      query(
+        `SELECT severity, COUNT(*)::int AS count
+           FROM router_logs
+          WHERE collected_at > NOW() - ($1::int * INTERVAL '1 hour')
+            AND severity IN ('critical','high','medium')
+          GROUP BY severity`,
+        [hours]
+      ),
+      query(
+        `SELECT src_ip, COUNT(*)::int AS attempts, MAX(collected_at) AS last_seen
+           FROM router_logs
+          WHERE collected_at > NOW() - ($1::int * INTERVAL '1 hour')
+            AND category IN ('auth_failure','vpn_auth_failure','hotspot_auth_failure')
+            AND src_ip IS NOT NULL
+          GROUP BY src_ip
+          ORDER BY attempts DESC
+          LIMIT 5`,
+        [hours]
+      ),
+      query(
+        `SELECT created_at, service, action, target_username, actor_username
+           FROM password_audit_log
+          WHERE created_at > NOW() - ($1::int * INTERVAL '1 hour')
+          ORDER BY created_at DESC
+          LIMIT 10`,
+        [hours]
+      ),
+      query(
+        `SELECT category, COUNT(*)::int AS count
+           FROM router_logs
+          WHERE collected_at > NOW() - ($1::int * INTERVAL '1 hour')
+            AND severity IN ('critical','high','medium')
+            AND category IS NOT NULL
+          GROUP BY category
+          ORDER BY count DESC
+          LIMIT 6`,
+        [hours]
+      ),
+    ]);
+
+    const counts = Object.fromEntries(bySeverity.rows.map(r => [r.severity, r.count]));
+    res.json({
+      hours,
+      critical: counts.critical || 0,
+      high: counts.high || 0,
+      medium: counts.medium || 0,
+      topAttackers: topAttackers.rows,
+      recentAudit: recentAudit.rows,
+      topCategories: byCategory.rows,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /dashboard/active-sessions — combined hotspot + VPN active sessions
+router.get('/active-sessions', auth, async (req, res) => {
+  try {
+    const [hs, ppp] = await Promise.allSettled([
+      mikrotik.getHotspotActive(),
+      mikrotik.getPppActive(),
+    ]);
+    res.json({
+      hotspot: (hs.value || []).map(s => ({
+        user: s.user, ip: s.address, mac: s['mac-address'], uptime: s.uptime,
+        bytes_in: Number(s['bytes-in']) || 0, bytes_out: Number(s['bytes-out']) || 0,
+      })),
+      vpn: (ppp.value || []).map(s => ({
+        user: s.name, service: s.service, address: s.address,
+        caller_id: s['caller-id'], uptime: s.uptime,
+      })),
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /dashboard/top-talkers?date=YYYY-MM-DD&limit=10 — devices using most bandwidth
+router.get('/top-talkers', auth, async (req, res) => {
+  try {
+    const date = req.query.date || new Date().toISOString().slice(0, 10);
+    const limit = Math.min(Number(req.query.limit) || 10, 50);
+    const r = await query(
+      `SELECT mac, hostname, ip, type, vendor, rx_bytes, tx_bytes, total_bytes
+         FROM device_usage_daily
+        WHERE day = $1
+        ORDER BY total_bytes DESC
+        LIMIT $2`,
+      [date, limit]
+    );
+    res.json({ date, rows: r.rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 module.exports = router;

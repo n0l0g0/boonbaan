@@ -1,4 +1,4 @@
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid, ReferenceLine } from 'recharts';
+import { LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid, ReferenceLine } from 'recharts';
 
 function formatTime(t, mode) {
   const d = new Date(t);
@@ -38,8 +38,18 @@ export function RealtimeBandwidthChart({ data }) {
   }));
 
   return (
-    <ResponsiveContainer width="100%" height={220}>
-      <LineChart data={formatted}>
+    <ResponsiveContainer width="100%" height={240}>
+      <AreaChart data={formatted}>
+        <defs>
+          <linearGradient id="rxGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#1677ff" stopOpacity={0.45} />
+            <stop offset="100%" stopColor="#1677ff" stopOpacity={0.02} />
+          </linearGradient>
+          <linearGradient id="txGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#52c41a" stopOpacity={0.45} />
+            <stop offset="100%" stopColor="#52c41a" stopOpacity={0.02} />
+          </linearGradient>
+        </defs>
         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
         <XAxis
           dataKey="t"
@@ -55,9 +65,9 @@ export function RealtimeBandwidthChart({ data }) {
         <YAxis unit=" Mbps" width={70} tickFormatter={v => v.toFixed(1)} />
         <Tooltip content={<CustomTooltip mode="realtime" />} />
         <Legend />
-        <Line type="monotone" dataKey="rx" stroke="#1677ff" dot={false} name="Download (RX)" strokeWidth={2} />
-        <Line type="monotone" dataKey="tx" stroke="#52c41a" dot={false} name="Upload (TX)" strokeWidth={2} />
-      </LineChart>
+        <Area type="monotone" dataKey="rx" stroke="#1677ff" fill="url(#rxGrad)" name="Download (RX)" strokeWidth={2} />
+        <Area type="monotone" dataKey="tx" stroke="#52c41a" fill="url(#txGrad)" name="Upload (TX)" strokeWidth={2} />
+      </AreaChart>
     </ResponsiveContainer>
   );
 }
