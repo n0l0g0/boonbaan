@@ -1,5 +1,6 @@
 const { query } = require('../config/db');
 const mikrotik = require('./mikrotik');
+const { classify } = require('./logClassifier');
 
 // Parse MikroTik log level from topics string
 function parseLevel(topics = '') {
@@ -91,12 +92,24 @@ function idToInt(id) {
 
 async function collectLogs(io = null) {
   try {
-    const lastId = await getLastLogId();
-    const lastInt = idToInt(lastId);
+    let lastId = await getLastLogId();
+    let lastInt = idToInt(lastId);
 
     const { getMikrotikClient } = require('../config/mikrotik');
     const mk = await getMikrotikClient.fromDB();
     const all = await mk.get('/log').then(r => r.data).catch(() => []);
+
+    // Detect log-buffer rollover (router reboot / clear): IDs reset to 0,
+    // so our stored cursor sits above MikroTik's current max → no log would
+    // ever match. Reset the cursor and ingest everything in the buffer.
+    if (all.length) {
+      const maxInt = idToInt(all[all.length - 1]['.id']);
+      if (lastInt > maxInt) {
+        console.warn(`log collector: cursor ${lastId} > current max *${maxInt.toString(16)} — buffer rotated, resetting cursor`);
+        lastId = null;
+        lastInt = -1;
+      }
+    }
 
     const logs = lastId
       ? all.filter(l => idToInt(l['.id']) > lastInt)
@@ -107,10 +120,11 @@ async function collectLogs(io = null) {
     for (const log of logs) {
       const { username, src_ip } = parseDetails(log.message || '', log.topics || '');
       const logTime = parseLogTime(log.time);
+      const { category, severity } = classify(log.message || '', log.topics || '');
       const result = await query(
-        `INSERT INTO router_logs (collected_at, log_time, topics, level, message, username, src_ip, raw_time)
-         VALUES (NOW(), $1, $2, $3, $4, $5, $6, $7)
-         RETURNING id, collected_at, log_time, topics, level, message, username, src_ip, raw_time`,
+        `INSERT INTO router_logs (collected_at, log_time, topics, level, message, username, src_ip, raw_time, category, severity)
+         VALUES (NOW(), $1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING id, collected_at, log_time, topics, level, message, username, src_ip, raw_time, category, severity`,
         [
           logTime,
           log.topics || null,
@@ -119,6 +133,8 @@ async function collectLogs(io = null) {
           username,
           src_ip,
           log.time || null,
+          category,
+          severity,
         ]
       ).catch(() => null);
 
@@ -137,4 +153,27 @@ async function collectLogs(io = null) {
   }
 }
 
-module.exports = { collectLogs };
+// Re-classify existing rows that don't have category/severity set yet.
+// Safe to run repeatedly; only touches rows where severity IS NULL.
+async function backfillClassification(batchSize = 2000) {
+  let total = 0;
+  while (true) {
+    const r = await query(
+      `SELECT id, topics, message FROM router_logs WHERE severity IS NULL LIMIT $1`,
+      [batchSize]
+    );
+    if (!r.rows.length) break;
+    for (const row of r.rows) {
+      const { category, severity } = classify(row.message || '', row.topics || '');
+      await query(
+        `UPDATE router_logs SET category = $1, severity = $2 WHERE id = $3`,
+        [category, severity, row.id]
+      ).catch(() => {});
+    }
+    total += r.rows.length;
+    if (r.rows.length < batchSize) break;
+  }
+  return total;
+}
+
+module.exports = { collectLogs, backfillClassification };

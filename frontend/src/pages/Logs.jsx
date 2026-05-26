@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { Table, Select, Button, Space, Input, Tag, DatePicker, Row, Col, Card, Statistic, Tooltip, Badge } from 'antd';
-import { ReloadOutlined, SearchOutlined, UserOutlined, SyncOutlined, WifiOutlined } from '@ant-design/icons';
+import { Table, Select, Button, Space, Input, Tag, DatePicker, Row, Col, Card, Statistic, Tooltip, Badge, message } from 'antd';
+import { ReloadOutlined, SearchOutlined, UserOutlined, SyncOutlined, WifiOutlined, WarningOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import api from '../services/api';
 import { useSocket } from '../hooks/useSocket';
 import dayjs from 'dayjs';
@@ -29,6 +29,33 @@ const LEVEL_OPTIONS = [
 
 const LEVEL_COLORS = { error: 'red', warning: 'orange', info: 'blue', debug: 'default' };
 
+const SEVERITY_COLOR = { critical: 'magenta', high: 'red', medium: 'orange', low: 'gold', none: 'default' };
+const CATEGORY_LABEL = {
+  auth_failure: 'Auth Failure',
+  vpn_auth_failure: 'VPN Auth Fail',
+  hotspot_auth_failure: 'Hotspot Auth Fail',
+  system_reboot: 'System Reboot',
+  config_change: 'Config Change',
+  blacklist_hit: 'Blacklist Hit',
+  firewall_drop: 'Firewall Drop',
+  dhcp_conflict: 'DHCP Conflict',
+  critical_error: 'Critical Error',
+  router_error: 'Router Error',
+  router_warning: 'Router Warning',
+};
+const SEVERITY_OPTIONS = [
+  { value: '', label: 'ทุก Severity' },
+  { value: 'critical', label: '🟣 Critical' },
+  { value: 'high', label: '🔴 High' },
+  { value: 'medium', label: '🟠 Medium' },
+  { value: 'low', label: '🟡 Low' },
+  { value: 'none', label: '⚪ None' },
+];
+const CATEGORY_OPTIONS = [
+  { value: '', label: 'ทุก Category' },
+  ...Object.entries(CATEGORY_LABEL).map(([value, label]) => ({ value, label })),
+];
+
 const TZ_OPT = { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
 function fmtDate(v) { return v ? new Date(v).toLocaleString('th-TH', TZ_OPT) : '-'; }
 
@@ -41,10 +68,15 @@ export default function Logs() {
 
   const [newCount, setNewCount] = useState(0);
 
+  const [dangerSummary, setDangerSummary] = useState([]);
+  const [reclassifying, setReclassifying] = useState(false);
+
   const [filters, setFilters] = useState({
     search: '',
     topics: '',
     level: '',
+    category: '',
+    severity: '',
     username: '',
     src_ip: '',
     from: null,
@@ -71,8 +103,20 @@ export default function Logs() {
   async function loadUsers() {
     try { setUsers((await api.get('/logs/users')).data); } catch { }
   }
+  async function loadDangerSummary() {
+    try { setDangerSummary((await api.get('/logs/dangerous-summary?hours=24')).data.rows || []); } catch { }
+  }
+  async function reclassify() {
+    setReclassifying(true);
+    try {
+      const r = await api.post('/logs/reclassify');
+      message.success(`จัดหมวดหมู่ logs เก่าแล้ว ${r.data.updated} รายการ`);
+      await load(); await loadDangerSummary();
+    } catch (e) { message.error(e.response?.data?.error || 'failed'); }
+    setReclassifying(false);
+  }
 
-  useEffect(() => { load(); loadUsers(); }, []);
+  useEffect(() => { load(); loadUsers(); loadDangerSummary(); }, []);
 
   // Keep ref in sync so socket handler always sees latest filters
   useEffect(() => { filtersRef.current = filters; }, [filters]);
@@ -131,6 +175,22 @@ export default function Logs() {
       render: v => <Tag color={LEVEL_COLORS[v] || 'default'}>{v || '-'}</Tag>,
     },
     {
+      title: 'Threat', width: 160,
+      render: (_, r) => {
+        if (!r.category && (!r.severity || r.severity === 'none')) return <span style={{ color: '#ddd' }}>-</span>;
+        return (
+          <Space size={2} wrap>
+            {r.severity && r.severity !== 'none' && (
+              <Tag color={SEVERITY_COLOR[r.severity]} style={{ marginBottom: 2 }}>{r.severity}</Tag>
+            )}
+            {r.category && (
+              <Tag style={{ marginBottom: 2 }}>{CATEGORY_LABEL[r.category] || r.category}</Tag>
+            )}
+          </Space>
+        );
+      },
+    },
+    {
       title: 'Topics', dataIndex: 'topics', width: 160,
       render: v => v ? v.split(',').map(t => <Tag key={t} style={{ marginBottom: 2 }}>{t.trim()}</Tag>) : '-',
     },
@@ -158,6 +218,10 @@ export default function Logs() {
     { title: 'ครั้งล่าสุด', dataIndex: 'last_seen', render: v => fmtDate(v) },
   ];
 
+  const totalCritical = dangerSummary.filter(r => r.severity === 'critical').reduce((a, b) => a + b.count, 0);
+  const totalHigh     = dangerSummary.filter(r => r.severity === 'high').reduce((a, b) => a + b.count, 0);
+  const totalMedium   = dangerSummary.filter(r => r.severity === 'medium').reduce((a, b) => a + b.count, 0);
+
   return (
     <div>
       <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
@@ -167,7 +231,55 @@ export default function Logs() {
         <Col xs={12} sm={6}>
           <Card size="small"><Statistic title="Users ที่พบ" value={users.length} /></Card>
         </Col>
+        <Col xs={12} sm={6}>
+          <Card size="small">
+            <Statistic
+              title={<><ThunderboltOutlined style={{ color: '#eb2f96' }} /> Critical (24h)</>}
+              value={totalCritical}
+              valueStyle={{ color: totalCritical > 0 ? '#eb2f96' : undefined }}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6}>
+          <Card size="small">
+            <Statistic
+              title={<><WarningOutlined style={{ color: '#f5222d' }} /> High (24h)</>}
+              value={totalHigh}
+              valueStyle={{ color: totalHigh > 0 ? '#f5222d' : undefined }}
+            />
+          </Card>
+        </Col>
       </Row>
+
+      {dangerSummary.length > 0 && (
+        <Card
+          size="small"
+          title={<Space><WarningOutlined /> เหตุการณ์อันตรายใน 24 ชม. ล่าสุด</Space>}
+          style={{ marginBottom: 16 }}
+          extra={<Button size="small" icon={<SyncOutlined />} loading={reclassifying} onClick={reclassify}>จัดหมวดหมู่ logs เก่า</Button>}
+        >
+          <Space wrap>
+            {dangerSummary.map(r => (
+              <Tag
+                key={`${r.category}-${r.severity}`}
+                color={SEVERITY_COLOR[r.severity]}
+                style={{ cursor: 'pointer', padding: '4px 10px' }}
+                onClick={() => {
+                  const next = { ...filters, category: r.category, severity: r.severity, page: 1 };
+                  setFilters(next); load(next);
+                }}
+              >
+                {CATEGORY_LABEL[r.category] || r.category}: <b>{r.count}</b>
+              </Tag>
+            ))}
+          </Space>
+        </Card>
+      )}
+      {dangerSummary.length === 0 && totalCritical === 0 && totalHigh === 0 && totalMedium === 0 && (
+        <Card size="small" style={{ marginBottom: 16, background: '#f6ffed', borderColor: '#b7eb8f' }}>
+          <Space><Tag color="green">SAFE</Tag>ไม่พบเหตุการณ์อันตรายใน 24 ชม. ที่ผ่านมา · <Button size="small" type="link" loading={reclassifying} onClick={reclassify}>จัดหมวดหมู่ logs เก่า</Button></Space>
+        </Card>
+      )}
 
       <Card
         title={
@@ -226,6 +338,18 @@ export default function Logs() {
             value={filters.level}
             onChange={v => setFilter('level', v)}
             style={{ width: 120 }}
+          />
+          <Select
+            options={SEVERITY_OPTIONS}
+            value={filters.severity}
+            onChange={v => setFilter('severity', v)}
+            style={{ width: 150 }}
+          />
+          <Select
+            options={CATEGORY_OPTIONS}
+            value={filters.category}
+            onChange={v => setFilter('category', v)}
+            style={{ width: 180 }}
           />
           <RangePicker
             showTime

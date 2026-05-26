@@ -1,7 +1,8 @@
 const router = require('express').Router();
 const auth = require('../middleware/auth');
 const { query } = require('../config/db');
-const { collectLogs } = require('../services/logcollector.service');
+const { collectLogs, backfillClassification } = require('../services/logcollector.service');
+const { CATEGORIES, SEVERITIES } = require('../services/logClassifier');
 
 // Search DB logs (90-day history)
 router.get('/', auth, async (req, res) => {
@@ -12,6 +13,8 @@ router.get('/', auth, async (req, res) => {
       level = '',
       username = '',
       src_ip = '',
+      category = '',
+      severity = '',
       from,
       to,
       page = 1,
@@ -42,6 +45,14 @@ router.get('/', auth, async (req, res) => {
       conditions.push(`src_ip ILIKE $${p++}`);
       params.push(`%${src_ip}%`);
     }
+    if (category && CATEGORIES.includes(category)) {
+      conditions.push(`category = $${p++}`);
+      params.push(category);
+    }
+    if (severity && SEVERITIES.includes(severity)) {
+      conditions.push(`severity = $${p++}`);
+      params.push(severity);
+    }
     if (from) {
       conditions.push(`collected_at >= $${p++}`);
       params.push(from);
@@ -59,7 +70,8 @@ router.get('/', auth, async (req, res) => {
         `SELECT id,
                 collected_at,
                 log_time,
-                topics, level, message, username, src_ip, raw_time
+                topics, level, message, username, src_ip, raw_time,
+                category, severity
          FROM router_logs ${where}
          ORDER BY collected_at DESC
          LIMIT $${p++} OFFSET $${p++}`,
@@ -99,6 +111,40 @@ router.get('/users', auth, async (req, res) => {
        LIMIT 100`
     );
     res.json(r.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Threat summary: dangerous events grouped by category for a time window
+router.get('/dangerous-summary', auth, async (req, res) => {
+  try {
+    const hours = Math.min(Number(req.query.hours) || 24, 24 * 30);
+    const r = await query(
+      `SELECT category, severity, COUNT(*)::int as count,
+              MAX(collected_at) as last_seen
+         FROM router_logs
+        WHERE collected_at > NOW() - ($1::int * INTERVAL '1 hour')
+          AND severity IN ('critical', 'high', 'medium')
+          AND category IS NOT NULL
+        GROUP BY category, severity
+        ORDER BY
+          CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
+          count DESC`,
+      [hours]
+    );
+    res.json({ hours, rows: r.rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Filter option metadata (categories + severities available)
+router.get('/categories', auth, (req, res) => {
+  res.json({ categories: CATEGORIES, severities: SEVERITIES });
+});
+
+// Backfill classification for existing rows where severity IS NULL
+router.post('/reclassify', auth, async (req, res) => {
+  try {
+    const updated = await backfillClassification();
+    res.json({ ok: true, updated });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
