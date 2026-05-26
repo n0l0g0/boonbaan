@@ -35,6 +35,8 @@ app.use('/api/scheduler', require('./routes/scheduler'));
 app.use('/api/report', require('./routes/report'));
 app.use('/api/devices', require('./routes/devices'));
 app.use('/api/alerts', require('./routes/alerts'));
+app.use('/api/audit', require('./routes/audit'));
+app.use('/api/bruteforce', require('./routes/bruteforce'));
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
