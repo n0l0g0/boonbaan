@@ -9,6 +9,7 @@ const { collectSnapshot, cleanup: cleanupSiteUsage } = require('../services/site
 const { recordDeviceSnapshot } = require('../services/devices.service');
 const { sampleDeviceUsage, cleanupOldUsage } = require('../services/deviceusage.service');
 const { evaluateRules } = require('../services/alerts.service');
+const { evaluate: evaluateBruteForce } = require('../services/bruteforce.service');
 
 let latestStats = null;
 let io = null;
@@ -34,6 +35,12 @@ function startMonitorCron() {
     } catch (err) {
       console.error('Monitor cron error:', err.message);
     }
+  });
+
+  // Brute-force auto-block evaluator every 30s — scans recent auth_failure logs
+  cron.schedule('*/30 * * * * *', async () => {
+    try { await evaluateBruteForce(); }
+    catch (err) { console.error('Brute-force eval error:', err.message); }
   });
 
   // Device history snapshot every 5 min — tracks who connects/disconnects
