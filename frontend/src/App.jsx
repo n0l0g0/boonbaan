@@ -23,6 +23,10 @@ import Scheduler from './pages/Scheduler';
 import Report from './pages/Report';
 import Settings from './pages/Settings';
 import Devices from './pages/Devices';
+import HotspotReset from './pages/HotspotReset';
+import VpnReset from './pages/VpnReset';
+import AuditLog from './pages/AuditLog';
+import BruteForce from './pages/BruteForce';
 
 function PrivateRoute({ children }) {
   return localStorage.getItem('token') ? children : <Navigate to="/login" replace />;
@@ -50,6 +54,8 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/reset-hotspot/:token" element={<HotspotReset />} />
+          <Route path="/reset-vpn/:token" element={<VpnReset />} />
           <Route path="/" element={<PrivateRoute><AppLayout darkMode={darkMode} onToggleDark={toggleDark} /></PrivateRoute>}>
             <Route index element={<Dashboard />} />
             <Route path="hotspot" element={<Hotspot />} />
@@ -68,6 +74,8 @@ export default function App() {
             <Route path="report" element={<Report />} />
             <Route path="settings" element={<Settings />} />
             <Route path="devices" element={<Devices />} />
+            <Route path="audit-password" element={<AuditLog />} />
+            <Route path="bruteforce" element={<BruteForce />} />
           </Route>
         </Routes>
       </BrowserRouter>

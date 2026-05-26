@@ -41,6 +41,14 @@ const mikrotik = {
   updatePppSecret: (id, data) => mk().then(c => c.patch(`/ppp/secret/${id}`, data)).then(r => r.data),
   removePppSecret: (id) => mk().then(c => c.delete(`/ppp/secret/${id}`)).then(r => r.data),
   getPppActive: () => mk().then(c => c.get('/ppp/active')).then(r => r.data),
+  removePppActive: (id) => mk().then(c => c.delete(`/ppp/active/${id}`)).then(r => r.data),
+  kickPppByUser: async (username) => {
+    const c = await mk();
+    const list = await c.get('/ppp/active').then(r => r.data);
+    const sessions = list.filter(s => s.name === username);
+    await Promise.all(sessions.map(s => c.delete(`/ppp/active/${s['.id']}`).catch(() => {})));
+    return sessions.length;
+  },
   getL2tpServer: () => mk().then(c => c.get('/interface/l2tp-server/server')).then(r => r.data),
   getPptpServer: () => mk().then(c => c.get('/interface/pptp-server/server')).then(r => r.data),
 
@@ -50,6 +58,14 @@ const mikrotik = {
   updateHotspotUser: (id, data) => mk().then(c => c.patch(`/ip/hotspot/user/${id}`, data)).then(r => r.data),
   removeHotspotUser: (id) => mk().then(c => c.delete(`/ip/hotspot/user/${id}`)).then(r => r.data),
   getHotspotActive: () => mk().then(c => c.get('/ip/hotspot/active')).then(r => r.data),
+  removeHotspotActive: (id) => mk().then(c => c.delete(`/ip/hotspot/active/${id}`)).then(r => r.data),
+  kickHotspotByUser: async (username) => {
+    const c = await mk();
+    const list = await c.get('/ip/hotspot/active').then(r => r.data);
+    const sessions = list.filter(s => s.user === username);
+    await Promise.all(sessions.map(s => c.delete(`/ip/hotspot/active/${s['.id']}`).catch(() => {})));
+    return sessions.length;
+  },
 
   // Logs
   getLogs: (params = {}) => {
@@ -72,6 +88,13 @@ const mikrotik = {
 
   // Firewall (for monitoring blacklist hits)
   getFirewallRules: () => mk().then(c => c.get('/ip/firewall/filter')).then(r => r.data),
+
+  // Address lists (used by brute-force auto-block)
+  getAddressList: (listName) => mk().then(c =>
+    c.get(`/ip/firewall/address-list${listName ? `?list=${encodeURIComponent(listName)}` : ''}`)
+     .then(r => r.data)),
+  addAddressListEntry: (data) => mk().then(c => c.put('/ip/firewall/address-list', data)).then(r => r.data),
+  removeAddressListEntry: (id) => mk().then(c => c.delete(`/ip/firewall/address-list/${id}`)).then(r => r.data),
 };
 
 module.exports = mikrotik;

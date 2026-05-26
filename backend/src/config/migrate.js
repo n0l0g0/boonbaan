@@ -254,6 +254,84 @@ const migrations = [
   `CREATE INDEX IF NOT EXISTS idx_dch_device_ip_time  ON device_connection_history (device_ip, first_seen DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_dch_last_seen       ON device_connection_history (last_seen)`,
 
+  // Hotspot password-reset tokens (admin-generated, single-use, 10-min TTL)
+  `CREATE TABLE IF NOT EXISTS hotspot_password_reset_tokens (
+    id SERIAL PRIMARY KEY,
+    token VARCHAR(64) UNIQUE NOT NULL,
+    username VARCHAR(100) NOT NULL,
+    mt_id VARCHAR(32) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at TIMESTAMPTZ
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_hsprt_username ON hotspot_password_reset_tokens (username)`,
+  `CREATE INDEX IF NOT EXISTS idx_hsprt_expires ON hotspot_password_reset_tokens (expires_at)`,
+
+  // VPN (PPP) password-reset tokens (admin-generated, single-use, 10-min TTL)
+  `CREATE TABLE IF NOT EXISTS vpn_password_reset_tokens (
+    id SERIAL PRIMARY KEY,
+    token VARCHAR(64) UNIQUE NOT NULL,
+    username VARCHAR(100) NOT NULL,
+    mt_id VARCHAR(32) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at TIMESTAMPTZ
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_vprt_username ON vpn_password_reset_tokens (username)`,
+  `CREATE INDEX IF NOT EXISTS idx_vprt_expires ON vpn_password_reset_tokens (expires_at)`,
+
+  // Audit log for password-related operations (admin edits, reset link issued, email sent, user-driven reset)
+  `CREATE TABLE IF NOT EXISTS password_audit_log (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    service VARCHAR(20) NOT NULL,
+    action VARCHAR(40) NOT NULL,
+    target_username VARCHAR(100) NOT NULL,
+    actor_username VARCHAR(100),
+    actor_ip VARCHAR(64),
+    status VARCHAR(20) NOT NULL DEFAULT 'success',
+    details JSONB
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_pal_created ON password_audit_log (created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_pal_service ON password_audit_log (service)`,
+  `CREATE INDEX IF NOT EXISTS idx_pal_action ON password_audit_log (action)`,
+  `CREATE INDEX IF NOT EXISTS idx_pal_target ON password_audit_log (target_username)`,
+  `CREATE INDEX IF NOT EXISTS idx_pal_actor ON password_audit_log (actor_username)`,
+
+  // Threat classification for router logs
+  `ALTER TABLE router_logs ADD COLUMN IF NOT EXISTS category VARCHAR(30)`,
+  `ALTER TABLE router_logs ADD COLUMN IF NOT EXISTS severity VARCHAR(10)`,
+  `CREATE INDEX IF NOT EXISTS idx_router_logs_category ON router_logs (category)`,
+  `CREATE INDEX IF NOT EXISTS idx_router_logs_severity ON router_logs (severity)`,
+
+  // Brute-force auto-block tracking
+  `CREATE TABLE IF NOT EXISTS brute_force_blocks (
+    id SERIAL PRIMARY KEY,
+    ip VARCHAR(64) NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 1,
+    categories TEXT,
+    first_seen TIMESTAMPTZ NOT NULL,
+    blocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL,
+    unblocked_at TIMESTAMPTZ,
+    unblocked_by VARCHAR(100),
+    mt_id VARCHAR(32),
+    status VARCHAR(20) NOT NULL DEFAULT 'active'
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_bfb_ip ON brute_force_blocks (ip)`,
+  `CREATE INDEX IF NOT EXISTS idx_bfb_status ON brute_force_blocks (status)`,
+  `CREATE INDEX IF NOT EXISTS idx_bfb_blocked_at ON brute_force_blocks (blocked_at DESC)`,
+
+  // Brute-force default settings
+  `INSERT INTO settings (key, value) VALUES
+    ('bf_enabled', 'true'),
+    ('bf_window_min', '10'),
+    ('bf_threshold', '5'),
+    ('bf_block_duration_min', '60'),
+    ('bf_address_list', 'auto_blacklist'),
+    ('bf_whitelist_extra', '')
+  ON CONFLICT (key) DO NOTHING`,
+
   // MikroTik connection settings (seed from env if not set)
   `INSERT INTO settings (key, value) VALUES
     ('mikrotik_host', '${process.env.MIKROTIK_HOST || '192.168.88.1'}'),
