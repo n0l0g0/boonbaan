@@ -141,6 +141,9 @@ async function pollAps() {
   catch { return []; }
 }
 
+// Track previous WAN online state for Up/Down edge detection
+const wanOnlineState = new Map(); // name -> boolean
+
 async function pollIspStatus() {
   try {
     const c = await getMikrotikClient.fromDB();
@@ -148,9 +151,19 @@ async function pollIspStatus() {
       try {
         const iface = await c.get(`/interface/${encodeURIComponent(wan.name)}`).then(r => r.data);
         const online = iface.running === 'true';
-        if (!online && canAlert(`isp_down_${wan.name}`)) {
-          await notify('critical', `${wan.label} Down`, `Interface ${wan.name} is not running`);
+        const prev = wanOnlineState.get(wan.name);
+
+        if (prev !== undefined) {
+          if (!online && prev) {
+            // Transition: UP → DOWN
+            await notify('critical', `${wan.label} Down`, `Interface ${wan.name} is not running`);
+          } else if (online && !prev) {
+            // Transition: DOWN → UP
+            await notify('warning', `${wan.label} Up`, `Interface ${wan.name} is back online ✅`);
+          }
         }
+        wanOnlineState.set(wan.name, online);
+
         return { name: wan.name, label: wan.label, online };
       } catch {
         return { name: wan.name, label: wan.label, online: false };

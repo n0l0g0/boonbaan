@@ -748,7 +748,7 @@ function NotificationForm({ settings, saving, onSave }) {
   const [form] = Form.useForm();
   useEffect(() => {
     form.setFieldsValue(normalize(settings,
-      ['alert_email_enabled', 'alert_chat_enabled', 'line_notify_enabled', 'blocked_access_notify'],
+      ['alert_email_enabled', 'alert_chat_enabled', 'line_notify_enabled', 'blocked_access_notify', 'hotspot_notify_enabled'],
       ['blocked_access_cooldown_sec']
     ));
   }, [settings]);
@@ -772,6 +772,10 @@ function NotificationForm({ settings, saving, onSave }) {
         </Form.Item>
         <Form.Item name="line_notify_token" label="LINE Notify Token" extra={<a href="https://notify-bot.line.me/my/" target="_blank" rel="noreferrer">ขอ Token ที่นี่</a>}>
           <Input.Password placeholder="ใส่ token จาก LINE Notify" />
+        </Form.Item>
+        <Divider>Hotspot</Divider>
+        <Form.Item name="hotspot_notify_enabled" label="แจ้งเตือน Login / Logout Hotspot ไปยัง Google Chat" valuePropName="checked">
+          <Switch />
         </Form.Item>
         <Divider>Blocked Access</Divider>
         <Form.Item name="blocked_access_notify" label="แจ้งเตือนเมื่อมีการเข้าเว็บ Block" valuePropName="checked">

@@ -10,6 +10,7 @@ const { recordDeviceSnapshot } = require('../services/devices.service');
 const { sampleDeviceUsage, cleanupOldUsage } = require('../services/deviceusage.service');
 const { evaluateRules } = require('../services/alerts.service');
 const { evaluate: evaluateBruteForce } = require('../services/bruteforce.service');
+const { pollHotspotNotify } = require('../services/hotspot.notify.service');
 
 let latestStats = null;
 let io = null;
@@ -41,6 +42,12 @@ function startMonitorCron() {
   cron.schedule('*/30 * * * * *', async () => {
     try { await evaluateBruteForce(); }
     catch (err) { console.error('Brute-force eval error:', err.message); }
+  });
+
+  // Hotspot login/logout Google Chat notifications every 30s
+  cron.schedule('*/30 * * * * *', async () => {
+    try { await pollHotspotNotify(); }
+    catch (err) { console.error('Hotspot notify error:', err.message); }
   });
 
   // Device history snapshot every 5 min — tracks who connects/disconnects
