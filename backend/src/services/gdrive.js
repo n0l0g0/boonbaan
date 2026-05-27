@@ -20,8 +20,18 @@ async function getGDriveConfig() {
       'gdrive_enabled', 'gdrive_backup_folder_id', 'gdrive_logs_folder_id', 'gdrive_credentials', 'gdrive_refresh_token',
     ]]);
     const s = Object.fromEntries(r.rows.map(row => [row.key, row.value]));
+
+    // Service Account ไม่มี OAuth flow — ถ้า credentials เป็น service_account ให้ enabled เสมอ
+    let enabled = s.gdrive_enabled === 'true';
+    if (!enabled && s.gdrive_credentials) {
+      try {
+        const cred = JSON.parse(s.gdrive_credentials);
+        if (cred.type === 'service_account') enabled = true;
+      } catch { /* invalid JSON */ }
+    }
+
     return {
-      enabled: s.gdrive_enabled === 'true',
+      enabled,
       backupFolderId: s.gdrive_backup_folder_id || null,
       logsFolderId: s.gdrive_logs_folder_id || null,
       credentials: s.gdrive_credentials || null,

@@ -101,7 +101,11 @@ router.get('/gdrive/status', auth, async (req, res) => {
     const cfg = await getGDriveConfig();
     if (!cfg.credentials) return res.json({ connected: false, type: null });
     const credJson = JSON.parse(cfg.credentials);
-    if (credJson.type === 'service_account') return res.json({ connected: true, type: 'service_account', email: credJson.client_email });
+    if (credJson.type === 'service_account') {
+      // Auto-enable — service accounts don't go through OAuth callback
+      await query("INSERT INTO settings (key, value, updated_at) VALUES ('gdrive_enabled', 'true', NOW()) ON CONFLICT (key) DO UPDATE SET value = 'true', updated_at = NOW()").catch(() => {});
+      return res.json({ connected: true, type: 'service_account', email: credJson.client_email });
+    }
     const web = credJson.web || credJson.installed;
     res.json({ connected: !!cfg.refreshToken, type: 'oauth2', clientId: web?.client_id, hasToken: !!cfg.refreshToken });
   } catch (err) { res.status(500).json({ error: err.message }); }
