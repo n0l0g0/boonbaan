@@ -40,7 +40,6 @@ export default function HotspotReset() {
     setSubmitting(true);
     try {
       await pub.post(`/hotspot/reset/${token}`, {
-        oldPassword: values.oldPassword,
         newPassword: values.newPassword,
       });
       setDone(true);
@@ -91,9 +90,6 @@ export default function HotspotReset() {
       />
       {err && <Alert type="error" message={err} style={{ marginBottom: 12 }} showIcon closable onClose={() => setErr('')} />}
       <Form form={form} layout="vertical" onFinish={submit}>
-        <Form.Item name="oldPassword" label="รหัสผ่านเดิม" rules={[{ required: true }]}>
-          <Input.Password autoComplete="current-password" />
-        </Form.Item>
         <Form.Item name="newPassword" label="รหัสผ่านใหม่" rules={[{ required: true }]}>
           <Input.Password autoComplete="new-password" />
         </Form.Item>

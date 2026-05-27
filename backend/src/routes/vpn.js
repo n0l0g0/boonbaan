@@ -159,8 +159,8 @@ router.get('/reset/:token', async (req, res) => {
 // Public: consume token + change password
 router.post('/reset/:token', async (req, res) => {
   try {
-    const { oldPassword, newPassword } = req.body || {};
-    if (!oldPassword || !newPassword) return res.status(400).json({ error: 'missing fields' });
+    const { newPassword } = req.body || {};
+    if (!newPassword) return res.status(400).json({ error: 'missing fields' });
     const issues = validatePassword(newPassword);
     if (issues.length) return res.status(400).json({ error: 'password ไม่ผ่านเงื่อนไข: ' + issues.join(', ') });
 
@@ -178,7 +178,6 @@ router.post('/reset/:token', async (req, res) => {
     const secrets = await mikrotik.getPppSecrets();
     const u = secrets.find(x => x.name === row.username);
     if (!u) return res.status(404).json({ error: 'VPN user หายไป' });
-    if ((u.password || '') !== oldPassword) return res.status(401).json({ error: 'รหัสเก่าไม่ถูกต้อง' });
 
     await mikrotik.updatePppSecret(u['.id'], { password: newPassword });
     await mikrotik.kickPppByUser(u.name).catch(() => {});

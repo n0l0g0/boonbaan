@@ -152,8 +152,8 @@ router.get('/reset/:token', async (req, res) => {
 // Public: consume token + change password
 router.post('/reset/:token', async (req, res) => {
   try {
-    const { oldPassword, newPassword } = req.body || {};
-    if (!oldPassword || !newPassword) return res.status(400).json({ error: 'missing fields' });
+    const { newPassword } = req.body || {};
+    if (!newPassword) return res.status(400).json({ error: 'missing fields' });
     const issues = validatePassword(newPassword);
     if (issues.length) return res.status(400).json({ error: 'password ไม่ผ่านเงื่อนไข: ' + issues.join(', ') });
 
@@ -168,11 +168,9 @@ router.post('/reset/:token', async (req, res) => {
     if (row.used_at) return res.status(410).json({ error: 'used' });
     if (new Date(row.expires_at).getTime() < Date.now()) return res.status(410).json({ error: 'expired' });
 
-    // Verify old password against current MikroTik value
     const users = await mikrotik.getHotspotUsers();
     const u = users.find(x => x.name === row.username);
     if (!u) return res.status(404).json({ error: 'hotspot user หายไป' });
-    if ((u.password || '') !== oldPassword) return res.status(401).json({ error: 'รหัสเก่าไม่ถูกต้อง' });
 
     await mikrotik.updateHotspotUser(u['.id'], { password: newPassword });
     await mikrotik.kickHotspotByUser(u.name).catch(() => {});
