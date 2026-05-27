@@ -154,11 +154,13 @@ export default function Hotspot() {
     }
   }
 
+  const BUILTIN_USERS = ['default', 'default-trial'];
+
   const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const list = q
-      ? users.filter(u => (u.name || '').toLowerCase().includes(q))
-      : users;
+    const list = users
+      .filter(u => !BUILTIN_USERS.includes(u.name))
+      .filter(u => !q || (u.name || '').toLowerCase().includes(q));
     return [...list].sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base', numeric: true }));
   }, [users, search]);
 
