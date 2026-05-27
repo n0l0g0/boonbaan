@@ -489,7 +489,7 @@ function GDriveForm({ settings, saving, onSave }) {
                       4. ระบบจะกลับมาที่หน้านี้อัตโนมัติ
                     </div>
                     <Alert type="warning" showIcon style={{ fontSize: 11 }}
-                      message={`ต้องเพิ่ม redirect URI นี้ใน Google Cloud Console → OAuth2 Client → Authorized redirect URIs: ${window.location.protocol}//${window.location.hostname}:3001/api/settings/gdrive/callback`} />
+                      message={`ต้องเพิ่ม redirect URI นี้ใน Google Cloud Console → OAuth2 Client → Authorized redirect URIs: ${window.location.origin}/api/settings/gdrive/callback`} />
                   </div>
                 }
               />
@@ -544,7 +544,7 @@ function GDriveForm({ settings, saving, onSave }) {
                   <div>
                     <Text type="secondary" style={{ fontSize: 12 }}>Google Cloud Console → Credentials → คลิก OAuth2 Client → Authorized redirect URIs → เพิ่ม:</Text>
                     <pre style={{ background: '#f5f5f5', padding: 6, borderRadius: 4, fontSize: 10, marginTop: 4, wordBreak: 'break-all' }}>
-                      {`${window.location.protocol}//${window.location.hostname}:3001/api/settings/gdrive/callback`}
+                      {`${window.location.origin}/api/settings/gdrive/callback`}
                     </pre>
                   </div>
                 ),
