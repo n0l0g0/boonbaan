@@ -18,6 +18,7 @@ export default function Hotspot() {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('users');
   const [activeRefreshAt, setActiveRefreshAt] = useState(null);
+  const [usersRefreshAt, setUsersRefreshAt] = useState(null);
   const [form] = Form.useForm();
   const [editForm] = Form.useForm();
   const [emailForm] = Form.useForm();
@@ -34,6 +35,20 @@ export default function Hotspot() {
   }
 
   useEffect(() => { load(); }, []);
+
+  // Auto-refresh users list every 30s while the Users tab is open
+  useEffect(() => {
+    if (activeTab !== 'users') return;
+    async function refreshUsers() {
+      try {
+        const r = await api.get('/hotspot/users');
+        setUsers(r.data || []);
+        setUsersRefreshAt(new Date());
+      } catch { /* keep last data on error */ }
+    }
+    const id = setInterval(refreshUsers, 30_000);
+    return () => clearInterval(id);
+  }, [activeTab]);
 
   // Auto-refresh active sessions every 30s while the Active tab is open
   useEffect(() => {
@@ -226,6 +241,9 @@ export default function Hotspot() {
               style={{ width: 260 }}
             />
             <span style={{ color: '#888' }}>ทั้งหมด {filteredUsers.length} รายการ</span>
+            <span style={{ color: '#bbb', fontSize: 12 }}>
+              อัพเดตอัตโนมัติทุก 30 วินาที{usersRefreshAt ? ` — ล่าสุด ${usersRefreshAt.toLocaleTimeString()}` : ''}
+            </span>
           </Space>
           <Table
             dataSource={filteredUsers}
