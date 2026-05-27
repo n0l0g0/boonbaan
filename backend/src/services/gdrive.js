@@ -112,7 +112,11 @@ async function testDriveConnection(credentialsJson, folderId, refreshToken) {
 
   const drive = google.drive({ version: 'v3', auth });
   const q = folderId ? `'${folderId}' in parents and trashed=false` : 'trashed=false';
-  const res = await drive.files.list({ q, pageSize: 5, fields: 'files(id,name)' });
+  const res = await drive.files.list({
+    q, pageSize: 5, fields: 'files(id,name)',
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
+  });
   return { ok: true, files: res.data.files || [] };
 }
 
@@ -125,7 +129,11 @@ async function uploadFile(content, fileName, mimeType = 'text/plain') {
     : content;
   const resource = { name: fileName, parents: folderId ? [folderId] : undefined };
   const media = { mimeType, body: bodyStream };
-  const res = await drive.files.create({ resource, media, fields: 'id,name,webViewLink' });
+  const res = await drive.files.create({
+    resource, media,
+    fields: 'id,name,webViewLink',
+    supportsAllDrives: true,
+  });
   return res.data;
 }
 
@@ -135,7 +143,11 @@ async function uploadBackup(filePath, fileName) {
   const { drive, folderId } = client;
   const media = { mimeType: 'application/octet-stream', body: fs.createReadStream(filePath) };
   const resource = { name: fileName, parents: folderId ? [folderId] : undefined };
-  const res = await drive.files.create({ resource, media, fields: 'id,name,webViewLink' });
+  const res = await drive.files.create({
+    resource, media,
+    fields: 'id,name,webViewLink',
+    supportsAllDrives: true,
+  });
   return res.data;
 }
 
@@ -144,7 +156,14 @@ async function listBackupsOnDrive() {
   if (!client) return [];
   const { drive, folderId } = client;
   const q = folderId ? `'${folderId}' in parents and trashed=false` : "name contains '.backup' and trashed=false";
-  const res = await drive.files.list({ q, fields: 'files(id,name,createdTime,size,webViewLink)', orderBy: 'createdTime desc', pageSize: 20 });
+  const res = await drive.files.list({
+    q,
+    fields: 'files(id,name,createdTime,size,webViewLink)',
+    orderBy: 'createdTime desc',
+    pageSize: 20,
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
+  });
   return res.data.files || [];
 }
 
