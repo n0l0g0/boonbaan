@@ -33,7 +33,11 @@ export default function Users() {
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 30_000);
+    return () => clearInterval(t);
+  }, []);
 
   function openAdd() { setEditing(null); form.resetFields(); setModalOpen(true); }
   function openEdit(u) { setEditing(u); form.setFieldsValue({ role: u.role }); setModalOpen(true); }
