@@ -35,6 +35,11 @@ async function resolveBaseUrl(req) {
   return (fromDb || process.env.PUBLIC_BASE_URL || req.headers.origin || `${req.protocol}://${req.headers.host}`).replace(/\/+$/, '');
 }
 
+router.get('/profiles', auth, async (req, res) => {
+  try { res.json(await mikrotik.getHotspotProfiles()); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.get('/users', auth, async (req, res) => {
   try { res.json(await mikrotik.getHotspotUsers()); }
   catch (err) { res.status(500).json({ error: err.message }); }

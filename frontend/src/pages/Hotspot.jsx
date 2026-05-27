@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Table, Button, Modal, Form, Input, Space, Popconfirm, message, Tabs, Tag, Alert, Statistic, Tooltip } from 'antd';
+import { Table, Button, Modal, Form, Input, Select, Space, Popconfirm, message, Tabs, Tag, Alert, Statistic, Tooltip } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined, EyeOutlined, EyeInvisibleOutlined, LinkOutlined, CopyOutlined, MailOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import api from '../services/api';
 import PasswordChecklist from '../components/PasswordChecklist';
@@ -19,6 +19,7 @@ export default function Hotspot() {
   const [activeTab, setActiveTab] = useState('users');
   const [activeRefreshAt, setActiveRefreshAt] = useState(null);
   const [usersRefreshAt, setUsersRefreshAt] = useState(null);
+  const [profiles, setProfiles] = useState([]);
   const [form] = Form.useForm();
   const [editForm] = Form.useForm();
   const [emailForm] = Form.useForm();
@@ -34,7 +35,12 @@ export default function Hotspot() {
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    api.get('/hotspot/profiles')
+      .then(r => setProfiles(r.data || []))
+      .catch(() => {});
+  }, []);
 
   // Auto-refresh users list every 30s while the Users tab is open
   useEffect(() => {
@@ -292,7 +298,11 @@ export default function Hotspot() {
           </Form.Item>
           <PasswordChecklist value={newPassword || ''} />
           <Form.Item name="profile" label="Profile" initialValue="default" style={{ marginTop: 12 }}>
-            <Input />
+            <Select
+              options={profiles.map(p => ({ value: p.name, label: p.name }))}
+              placeholder="เลือก Profile"
+              showSearch
+            />
           </Form.Item>
           <Form.Item name="comment" label="Comment">
             <Input />

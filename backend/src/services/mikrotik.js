@@ -53,6 +53,7 @@ const mikrotik = {
   getPptpServer: () => mk().then(c => c.get('/interface/pptp-server/server')).then(r => r.data),
 
   // Hotspot
+  getHotspotProfiles: () => mk().then(c => c.get('/ip/hotspot/user/profile')).then(r => r.data),
   getHotspotUsers: () => mk().then(c => c.get('/ip/hotspot/user')).then(r => r.data),
   addHotspotUser: (data) => mk().then(c => c.put('/ip/hotspot/user', data)).then(r => r.data),
   updateHotspotUser: (id, data) => mk().then(c => c.patch(`/ip/hotspot/user/${id}`, data)).then(r => r.data),
