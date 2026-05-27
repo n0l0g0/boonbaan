@@ -1,5 +1,5 @@
 const { query } = require('../config/db');
-const { sendEmail, getSettings } = require('./notification');
+const { sendEmail, sendGoogleChat, getSettings } = require('./notification');
 const { uploadFile, generateFileName } = require('./gdrive');
 const { getHistoryForDate, getHistoryForMonth } = require('./siteusage.service');
 
@@ -393,7 +393,17 @@ async function sendDailyReport() {
       const rows = await query(`SELECT detected_at, src_ip, dst_host FROM blocked_access_log WHERE detected_at >= NOW() - INTERVAL '1 day' ORDER BY detected_at DESC`);
       const csv = ['เวลา,IP ต้นทาง,เว็บไซต์', ...rows.rows.map(r => `${fmtDate(r.detected_at)},${r.src_ip},${r.dst_host}`)].join('\n');
       const fname = generateFileName('blocked-log-daily', 'csv');
-      await uploadFile(csv, fname, 'text/csv');
+      const driveFile = await uploadFile(csv, fname, 'text/csv');
+      if (driveFile) {
+        const ts = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', hour12: false });
+        sendGoogleChat(
+          `📋 *Blocked Log รายวัน อัปโหลดสำเร็จ*\n` +
+          `📄 ไฟล์: \`${fname}\`\n` +
+          `🚫 รายการ Block: ${rows.rows.length} รายการ\n` +
+          `🔗 ${driveFile.webViewLink}\n` +
+          `🕐 ${ts}`
+        ).catch(() => {});
+      }
     } catch (e) { console.error('GDrive upload failed:', e.message); }
   }
 }
@@ -544,7 +554,18 @@ async function sendMonthlyReport() {
       const rows = await query(`SELECT detected_at, src_ip, dst_host FROM blocked_access_log WHERE detected_at >= $1 AND detected_at < $2 ORDER BY detected_at DESC`, [d.start, d.end]);
       const csv = ['เวลา,IP ต้นทาง,เว็บไซต์', ...rows.rows.map(r => `${fmtDate(r.detected_at)},${r.src_ip},${r.dst_host}`)].join('\n');
       const fname = generateFileName('blocked-log-monthly', 'csv');
-      await uploadFile(csv, fname, 'text/csv');
+      const driveFile = await uploadFile(csv, fname, 'text/csv');
+      if (driveFile) {
+        const ts = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', hour12: false });
+        sendGoogleChat(
+          `📊 *Blocked Log รายเดือน อัปโหลดสำเร็จ*\n` +
+          `📅 เดือน: ${d.monthName}\n` +
+          `📄 ไฟล์: \`${fname}\`\n` +
+          `🚫 รายการ Block: ${rows.rows.length} รายการ\n` +
+          `🔗 ${driveFile.webViewLink}\n` +
+          `🕐 ${ts}`
+        ).catch(() => {});
+      }
     } catch (e) { console.error('GDrive monthly upload failed:', e.message); }
   }
 }

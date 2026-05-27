@@ -7,6 +7,7 @@ const mikrotik = require('./mikrotik');
 const { uploadBackup, generateFileName } = require('./gdrive');
 const { query } = require('../config/db');
 const { getMikrotikConfig } = require('../config/mikrotik');
+const { sendGoogleChat } = require('./notification');
 
 // Create backup on router, download, upload to GDrive, record in history.
 // Used by both the manual /backup/create route and the scheduled backup task.
@@ -30,6 +31,15 @@ async function createBackupWithUpload(prefix = 'backup') {
     let driveFile = null;
     try {
       driveFile = await uploadBackup(tmpFile, `${backupName}.backup`);
+      if (driveFile) {
+        const ts = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', hour12: false });
+        sendGoogleChat(
+          `💾 *Backup อัปโหลดสำเร็จ*\n` +
+          `📄 ไฟล์: \`${backupName}.backup\`\n` +
+          `🔗 ${driveFile.webViewLink}\n` +
+          `🕐 ${ts}`
+        ).catch(() => {});
+      }
     } catch (e) {
       console.warn('GDrive upload failed:', e.message);
     }
