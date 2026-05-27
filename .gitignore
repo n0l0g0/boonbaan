@@ -6,3 +6,13 @@ node_modules/
 dist/
 build/
 .claude/
+
+# Secrets — never commit these
+.env
+.env.local
+.env.production
+backend/.env
+*.pem
+*.key
+*client_secret*.json
+*service_account*.json
