@@ -522,14 +522,26 @@ function GDriveForm({ settings, saving, onSave }) {
         <Card title="ตั้งค่าการ Upload Logs" size="small">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0' }}>
             <div>
-              <Text strong><FileTextOutlined /> Upload Blocked Log อัตโนมัติ</Text>
-              <div><Text type="secondary" style={{ fontSize: 12 }}>อัปโหลด CSV ของ blocked access log ไปพร้อมกับรายงาน Email (รายวัน/รายเดือน)</Text></div>
+              <Text strong><FileTextOutlined /> Upload Blocked Log อัตโนมัติรายวัน</Text>
+              <div><Text type="secondary" style={{ fontSize: 12 }}>อัปโหลด CSV ของ blocked access log ขึ้น Google Drive ทุกวันตามเวลาที่กำหนด</Text></div>
             </div>
             <Switch
               checked={settings.gdrive_logs_enabled === 'true'}
               onChange={v => onSave({ gdrive_logs_enabled: String(v) })}
             />
           </div>
+          {settings.gdrive_logs_enabled === 'true' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingBottom: 8 }}>
+              <Text style={{ fontSize: 13 }}>เวลา Upload:</Text>
+              <TimePicker
+                format="HH:mm"
+                minuteStep={15}
+                value={dayjs(settings.gdrive_logs_upload_time || '00:00', 'HH:mm')}
+                onChange={(_, t) => t && onSave({ gdrive_logs_upload_time: t })}
+              />
+              <Text type="secondary" style={{ fontSize: 12 }}>ทุกวัน (เวลาไทย)</Text>
+            </div>
+          )}
         </Card>
       </Col>
 

@@ -3,7 +3,7 @@ const { collectAll } = require('../services/monitor.service');
 const { pollProxyDenyLogs } = require('../services/proxylog.service');
 const { pollFirewallDropLogs } = require('../services/firewalllog.service');
 const { collectLogs } = require('../services/logcollector.service');
-const { sendDailyReport, sendMonthlyReport } = require('../services/report.service');
+const { sendDailyReport, sendMonthlyReport, uploadDailyLogToDrive } = require('../services/report.service');
 const { getSettings } = require('../services/notification');
 const { collectSnapshot, cleanup: cleanupSiteUsage } = require('../services/siteusage.service');
 const { recordDeviceSnapshot } = require('../services/devices.service');
@@ -105,6 +105,29 @@ function startMonitorCron() {
       console.error('Log collector cron error:', err.message);
     }
   });
+
+  // Standalone Drive log upload — runs every minute, checks configured time (default 00:00)
+  let lastDriveLogRun = '';
+  cron.schedule('* * * * *', async () => {
+    try {
+      const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: TZ, hour12: false,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit',
+      }).formatToParts(new Date()).reduce((a, p) => (a[p.type] = p.value, a), {});
+      const currentTime = `${parts.hour}:${parts.minute}`;
+      const todayKey = `${parts.year}-${parts.month}-${parts.day}`;
+
+      const { getSettings } = require('../services/notification');
+      const s = await getSettings(['gdrive_logs_enabled', 'gdrive_logs_upload_time']);
+      const uploadTime = s.gdrive_logs_upload_time || '00:00';
+
+      if (s.gdrive_logs_enabled === 'true' && currentTime === uploadTime && lastDriveLogRun !== todayKey) {
+        lastDriveLogRun = todayKey;
+        await uploadDailyLogToDrive().catch(e => console.error('Drive log upload error:', e.message));
+      }
+    } catch (err) { console.error('Drive log cron error:', err.message); }
+  }, { timezone: TZ });
 
   // Check report schedule every minute (reads time setting from DB dynamically)
   // Use Asia/Bangkok timezone so schedule matches user expectation regardless of server TZ

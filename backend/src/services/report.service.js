@@ -570,4 +570,40 @@ async function sendMonthlyReport() {
   }
 }
 
-module.exports = { sendDailyReport, sendMonthlyReport };
+// ── Standalone Drive log upload (runs daily, independent of email report) ──────
+
+async function uploadDailyLogToDrive() {
+  const s = await getSettings(['gdrive_logs_enabled', 'gdrive_logs_upload_time']);
+  if (s.gdrive_logs_enabled !== 'true') return;
+
+  try {
+    const rows = await query(
+      `SELECT detected_at, src_ip, dst_host FROM blocked_access_log
+        WHERE detected_at >= NOW() - INTERVAL '1 day'
+        ORDER BY detected_at DESC`
+    );
+    if (!rows.rows.length) return; // nothing to upload
+
+    const csv = [
+      'เวลา,IP ต้นทาง,เว็บไซต์',
+      ...rows.rows.map(r => `${fmtDate(r.detected_at)},${r.src_ip},${r.dst_host}`),
+    ].join('\n');
+    const fname = generateFileName('blocked-log-daily', 'csv');
+    const driveFile = await uploadFile(csv, fname, 'text/csv');
+
+    if (driveFile) {
+      const ts = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', hour12: false });
+      sendGoogleChat(
+        `📋 *Blocked Log รายวัน อัปโหลดสำเร็จ*\n` +
+        `📄 ไฟล์: \`${fname}\`\n` +
+        `🚫 รายการ Block: ${rows.rows.length} รายการ\n` +
+        `🔗 ${driveFile.webViewLink}\n` +
+        `🕐 ${ts}`
+      ).catch(() => {});
+    }
+  } catch (e) {
+    console.error('Drive daily log upload failed:', e.message);
+  }
+}
+
+module.exports = { sendDailyReport, sendMonthlyReport, uploadDailyLogToDrive };
