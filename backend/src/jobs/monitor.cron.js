@@ -11,6 +11,7 @@ const { sampleDeviceUsage, cleanupOldUsage } = require('../services/deviceusage.
 const { evaluateRules } = require('../services/alerts.service');
 const { evaluate: evaluateBruteForce } = require('../services/bruteforce.service');
 const { pollHotspotNotify } = require('../services/hotspot.notify.service');
+const { pollVpnNotify } = require('../services/vpn.notify.service');
 
 let latestStats = null;
 let io = null;
@@ -48,6 +49,12 @@ function startMonitorCron() {
   cron.schedule('*/30 * * * * *', async () => {
     try { await pollHotspotNotify(); }
     catch (err) { console.error('Hotspot notify error:', err.message); }
+  });
+
+  // VPN login/logout Google Chat notifications every 30s
+  cron.schedule('*/30 * * * * *', async () => {
+    try { await pollVpnNotify(); }
+    catch (err) { console.error('VPN notify error:', err.message); }
   });
 
   // Device history snapshot every 5 min — tracks who connects/disconnects

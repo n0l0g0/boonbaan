@@ -748,7 +748,7 @@ function NotificationForm({ settings, saving, onSave }) {
   const [form] = Form.useForm();
   useEffect(() => {
     form.setFieldsValue(normalize(settings,
-      ['alert_email_enabled', 'alert_chat_enabled', 'line_notify_enabled', 'blocked_access_notify', 'hotspot_notify_enabled'],
+      ['alert_email_enabled', 'alert_chat_enabled', 'line_notify_enabled', 'blocked_access_notify', 'hotspot_notify_enabled', 'vpn_notify_enabled'],
       ['blocked_access_cooldown_sec']
     ));
   }, [settings]);
@@ -775,6 +775,9 @@ function NotificationForm({ settings, saving, onSave }) {
         </Form.Item>
         <Divider>Hotspot</Divider>
         <Form.Item name="hotspot_notify_enabled" label="แจ้งเตือน Login / Logout Hotspot ไปยัง Google Chat" valuePropName="checked">
+          <Switch />
+        </Form.Item>
+        <Form.Item name="vpn_notify_enabled" label="แจ้งเตือน Login / Logout VPN ไปยัง Google Chat" valuePropName="checked">
           <Switch />
         </Form.Item>
         <Divider>Blocked Access</Divider>
